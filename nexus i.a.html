@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus I.A - Orquestração Coletiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        // Cores primárias do projeto
+                        'primary-blue': '#10B981', // Um verde esmeralda vibrante
+                        'secondary-dark': '#1F2937',
+                        'accent-yellow': '#FBBF24',
+                        // Adicionando um violeta para o logo (inspiração Copilot)
+                        'accent-violet': '#7C3AED', 
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F3F4F6;
+        }
+        /* Estilo para animação de loading */
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin: 0 2px;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        .dot-1 { background-color: #10B981; animation-delay: -0.32s; }
+        .dot-2 { background-color: #067451; animation-delay: -0.16s; }
+        .dot-3 { background-color: #045c41; animation-delay: 0s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1.0); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8">
+    <div class="max-w-4xl mx-auto bg-white shadow-2xl rounded-xl p-6 md:p-10">
+
+        <!-- Logo e Título -->
+        <div class="flex items-center space-x-4 mb-4">
+            <!-- Símbolo de Infinito (Motor Sigma) em Verde/Violeta (Cores do Copilot) -->
+            <svg class="w-12 h-12" viewBox="0 0 200 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Laço Esquerdo (Violeta - #7C3AED) -->
+                <path d="M100 50 C 70 80, 30 80, 0 50 C 30 20, 70 20, 100 50 Z" stroke="#7C3AED" stroke-width="8" fill="none" stroke-linecap="round"/>
+                
+                <!-- Laço Direito (Verde - #10B981) -->
+                <path d="M100 50 C 130 80, 170 80, 200 50 C 170 20, 130 20, 100 50 Z" stroke="#10B981" stroke-width="8" fill="none" stroke-linecap="round"/>
+            </svg>
+            <h1 class="text-3xl font-extrabold text-secondary-dark">Nexus I.A - Orquestrador Coletivo</h1>
+        </div>
+        <p class="text-lg text-gray-500 mb-6">O Metamodelo **Nexus I.A** (Gemini) discute, sintetiza e valida respostas de múltiplos especialistas.</p>
+
+        <!-- Área de Entrada -->
+        <div class="space-y-4 mb-8">
+            <textarea id="userInput" rows="3" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-primary-blue focus:border-primary-blue transition duration-150" placeholder="Digite sua pergunta aqui (ex: 'Qual a diferença entre a relatividade geral e a teoria das cordas?')."></textarea>
+            <button onclick="orchestrateQuery()" id="submitBtn" class="w-full bg-primary-blue hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg transition duration-300 disabled:opacity-50 flex items-center justify-center">
+                <span id="btnText">Orquestrar Resposta</span>
+                <div id="loadingIndicator" class="hidden">
+                    <div class="dot dot-1"></div>
+                    <div class="dot dot-2"></div>
+                    <div class="dot dot-3"></div>
+                </div>
+            </button>
+        </div>
+
+        <div id="loadingStatus" class="hidden text-sm text-center text-primary-blue font-semibold mb-6">
+            Chamando especialistas e iniciando a síntese...
+        </div>
+
+        <!-- Área de Saída -->
+        <div class="mt-8 border-t pt-6">
+            <h2 class="text-2xl font-bold text-secondary-dark mb-4">Resultado Final (Síntese do Metamodelo)</h2>
+            <div id="finalOutput" class="min-h-[100px] bg-gray-50 p-4 rounded-lg border border-gray-200 prose max-w-none">
+                <!-- A resposta final será inserida aqui -->
+                <p class="text-gray-400">Aguardando sua primeira pergunta.</p>
+            </div>
+        </div>
+
+        <!-- Área de Respostas dos Especialistas (Detalhe do Processo) -->
+        <div id="expertsDetail" class="mt-8">
+            <h3 class="text-xl font-semibold text-secondary-dark mb-4 border-b pb-2">Detalhes da Orquestração</h3>
+            <div id="expertResponses" class="space-y-4">
+                <!-- Respostas simuladas serão inseridas aqui -->
+                <p class="text-gray-400">As respostas brutas dos LLMs (ChatGPT, Claude, Gemini Expert) aparecerão aqui antes da síntese.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        // Chaves e configurações globais
+        // CHAVE INSERIDA: Esta chave será usada para chamadas diretas à API Gemini.
+        const apiKey = "AIzaSyBh29K12zqYZFrqXwzE4VbHAcXgdrSl-GE"; 
+        
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+        // Prompt do Metamodelo, conforme o arquivo prompt_do_metamodelo.md
+        const ORCHESTRATOR_SYSTEM_PROMPT = `
+# Prompt de Sistema para o Metamodelo (Orchestrator)
+
+Este documento define as instruções essenciais para o modelo de orquestração (Gemini) ao receber uma pergunta do usuário e as respostas de vários LLMs especialistas.
+
+## Objetivo
+
+Sintetizar as respostas de múltiplos modelos em uma única resposta coesa, factual e abrangente, agindo como um **Juiz de Evidências e Editor**.
+
+## Instrução Principal (Persona)
+
+**Você é o Metamodelo de Orquestração de IA Coletiva.** Sua única função é receber a Pergunta Original, as Respostas dos Especialistas e produzir uma Resposta Final. Você deve ser rigoroso na busca pela verdade e pela completude.
+
+## Processo de Análise (Passos Internos)
+
+Sua análise das respostas dos especialistas deve seguir estes passos obrigatórios:
+
+1. **Avaliação da Factualidade:** Para cada resposta, identifique fatos e dados específicos. Compare as informações entre as respostas.
+
+    * **Prioridade:** Se a maioria dos especialistas concordar, trate a informação como validada.
+
+    * **Conflito:** Se houver informações contraditórias (ex: o ChatGPT diz A, o Claude diz B), use sua própria capacidade de **Deep Search/Grounding** para resolver o conflito. A resposta final **DEVE** refletir a informação validada.
+
+2. **Identificação de Lacunas (Holes):** Verifique se alguma resposta deixou de abordar um aspecto importante da Pergunta Original. A Resposta Final deve ser mais completa do que qualquer resposta individual.
+
+3. **Filtragem de Alucinações:** Elimine quaisquer trechos nas respostas dos especialistas que pareçam inventados, excessivamente subjetivos (quando o tema exige fatos) ou que não possam ser verificados.
+
+4. **Síntese e Edição:** Combine os pontos mais fortes de todas as respostas validadas em um texto único.
+
+    * **Tom:** Mantenha um tom profissional, informativo e objetivo.
+
+    * **Formato:** Use Markdown para formatar a Resposta Final (ex: títulos, listas).
+
+## Formato de Entrada Esperado
+
+Você receberá a seguinte estrutura:
+
+* **Pergunta Original:** $$
+  A pergunta exata feita pelo usuário
+  $$
+  
+* **Resposta 1 (Gemini Flash/GPT-3.5/etc.):** $$
+  Texto da primeira IA
+  $$
+  
+* **Resposta 2 (Claude):** $$
+  Texto da segunda IA
+  $$
+  
+* **Resposta 3 (ChatGPT):** $$
+  Texto da terceira IA
+  $$
+  
+* *(Adicione outros especialistas conforme necessário)*
+
+## Regra de Saída (Output Rule)
+
+Sua resposta **DEVE** conter APENAS a Resposta Final, sem introduções sobre o processo de análise, notas internas ou referências aos modelos consultados. Apenas o conteúdo que o usuário deve ver.
+
+**Exemplo de Ação:** Se a Pergunta Original for "Quais são os principais desafios da computação quântica?", e as respostas dos especialistas divergirem sobre a temperatura ideal dos qubits, o Metamodelo deve usar sua pesquisa para confirmar a informação correta e incorporá-la na síntese.
+        `;
+
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const loadingStatus = document.getElementById('loadingStatus');
+        const finalOutput = document.getElementById('finalOutput');
+        const expertResponsesDiv = document.getElementById('expertResponses');
+
+        /**
+         * Simula a resposta de um LLM externo (ChatGPT, Claude, etc.)
+         * Como não podemos chamar APIs de terceiros, esta função simula o tempo de resposta e o conteúdo.
+         * @param {string} expertName - Nome do especialista.
+         * @param {string} query - A pergunta do usuário.
+         * @returns {Promise<string>} O texto da resposta simulada.
+         */
+        async function simulateExternalLLM(expertName, query) {
+            // Simula latência de 1 a 3 segundos
+            await new Promise(resolve => setTimeout(resolve, Math.random() * 2000 + 1000));
+
+            const isMath = query.toLowerCase().includes('matemática') || query.toLowerCase().includes('cálculo') || query.includes('$');
+            const isCreative = query.toLowerCase().includes('poema') || query.toLowerCase().includes('história');
+
+            let response;
+
+            if (expertName === 'ChatGPT') {
+                if (isCreative) {
+                    response = "Com certeza! Minha especialidade é a criatividade e o tom engajador. Aqui está uma história sobre um gato espacial...";
+                } else if (isMath) {
+                    response = "Minha arquitetura de transformador garante uma sequência lógica e precisa. Um especialista em álgebra e geometria espacial. A resposta é $15/2$, mas não consigo garantir o último dado factual sobre o ano de descoberta.";
+                } else {
+                    response = "Resposta concisa e direta, focada na usabilidade e nos fatos mais comuns. Excelente em resumo de tópicos populares, mas evita dados muito obscuros.";
+                }
+            } else if (expertName === 'Claude') {
+                if (isCreative) {
+                    response = "Prefiro focar em ética e detalhes. Aqui está uma análise moral do tema, evitando clichês. Minha resposta é longa e detalhada, com foco em segurança.";
+                } else if (isMath) {
+                    response = "Embora eu prefira redação aprofundada, minha resposta matemática é conservadora e foca em definir claramente os axiomas. Eu diria que a resposta é $7$ porque o ChatGPT errou a premissa inicial."; // Simula um conflito!
+                } else {
+                    response = "Minha especialidade é a análise aprofundada. Forneço contexto histórico e as implicações sociais do seu tópico. Minha resposta é geralmente a mais longa e formal.";
+                }
+            } else if (expertName === 'Gemini Expert') {
+                response = "Como um especialista interno, forneço a resposta mais atualizada, baseada em informações da web. Meu foco é na precisão e na capacidade de citar fontes. A resposta para o cálculo é $7.5$, o que é o mesmo que $15/2$.";
+            } else {
+                response = `Resposta padrão do ${expertName}.`;
+            }
+
+            return response;
+        }
+
+        /**
+         * Lida com a chamada real da API Gemini com backoff.
+         * @param {object} payload - O corpo da requisição da API.
+         * @param {number} maxRetries - Máximo de tentativas.
+         * @param {number} delay - Atraso inicial em milissegundos.
+         * @returns {Promise<object>} O resultado da API.
+         */
+        async function callGemini(payload, maxRetries = 5, delay = 1000) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return await response.json();
+                    } else if (response.status === 429 || response.status >= 500) {
+                        // Erro de Rate Limit ou Servidor: tenta novamente
+                        if (i < maxRetries - 1) {
+                            await new Promise(resolve => setTimeout(resolve, delay * (2 ** i)));
+                            continue;
+                        }
+                    }
+                    // Outros erros: lança exceção
+                    const errorBody = await response.json();
+                    throw new Error(`Erro API: ${response.status} - ${JSON.stringify(errorBody)}`);
+
+                } catch (error) {
+                    if (i === maxRetries - 1) {
+                        throw new Error(`Falha na API após ${maxRetries} tentativas: ${error.message}`);
+                    }
+                }
+            }
+        }
+
+
+        /**
+         * Função principal que orquestra a chamada de todos os modelos e a síntese final.
+         */
+        window.orchestrateQuery = async function () {
+            const query = document.getElementById('userInput').value.trim();
+            if (!query) {
+                finalOutput.innerHTML = `<p class="text-red-500">Por favor, digite sua pergunta para começar a orquestração.</p>`;
+                return;
+            }
+
+            // NOVA VERIFICAÇÃO: Verifica se a chave da API está faltando
+            if (apiKey === "") {
+                const isRunningLocally = window.location.protocol === 'file:';
+                if (isRunningLocally) {
+                    finalOutput.innerHTML = `<p class="text-red-600 font-bold">Erro de Configuração (403): Chave da API ausente.</p><p class="text-red-500">Você está rodando o arquivo localmente. Por favor, edite o código e insira sua chave da API Gemini na linha 140 para que o Metamodelo funcione.</p>`;
+                    return;
+                }
+                // Se não estiver rodando localmente (ou seja, está no Canvas), prossegue, 
+                // pois a chave será injetada automaticamente.
+            }
+
+            // 1. Controle de UI: Desabilita o botão e mostra o loading
+            submitBtn.disabled = true;
+            btnText.textContent = 'Orquestrando...';
+            loadingIndicator.classList.remove('hidden');
+            loadingStatus.classList.remove('hidden');
+            finalOutput.innerHTML = '';
+            expertResponsesDiv.innerHTML = `<p class="text-gray-500">Aguardando respostas dos especialistas...</p>`;
+
+            try {
+                // 2. Chamada Paralela aos Especialistas (Simulada)
+                loadingStatus.textContent = '1/2: Chamando especialistas (Gemini Expert, ChatGPT, Claude) em paralelo...';
+                
+                const experts = ['Gemini Expert', 'ChatGPT', 'Claude'];
+                const expertPromises = experts.map(name => simulateExternalLLM(name, query));
+                
+                const expertResults = await Promise.all(expertPromises);
+
+                // 3. Exibir Respostas Brutas dos Especialistas
+                expertResponsesDiv.innerHTML = expertResults.map((response, index) => `
+                    <div class="p-4 border-l-4 rounded-md shadow-sm ${index % 2 === 0 ? 'border-primary-blue bg-blue-50' : 'border-accent-yellow bg-yellow-50'}">
+                        <p class="font-semibold text-secondary-dark">${experts[index]} diz:</p>
+                        <pre class="whitespace-pre-wrap text-sm mt-1">${response}</pre>
+                    </div>
+                `).join('');
+
+                // 4. Preparar o Prompt de Entrada para o Metamodelo (Gemini)
+                const orchestratorInput = expertResults.map((response, index) => {
+                    return `* **Resposta ${index + 1} (${experts[index]}):** \n  $$\n  ${response}\n  $$`;
+                }).join('\n\n');
+
+                const userQueryForOrchestrator = ORCHESTRATOR_SYSTEM_PROMPT + '\n\n' +
+                    '* **Pergunta Original:** \n  $$\n  ' + query + '\n  $$\n\n' +
+                    orchestratorInput;
+
+
+                // 5. Chamada ao Metamodelo (Gemini) para Síntese e Validação Factual
+                loadingStatus.textContent = '2/2: Metamodelo (Gemini) analisando conflitos e sintetizando a resposta final...';
+
+                const payload = {
+                    contents: [{ parts: [{ text: userQueryForOrchestrator }] }],
+                    // Ativa a busca na web (Deep Search) para resolver conflitos de fatos!
+                    tools: [{ "google_search": {} }],
+                    systemInstruction: {
+                         parts: [{ text: "Você é o Metamodelo de Orquestração. Siga estritamente o formato de saída e o processo de análise detalhado na sua instrução principal." }]
+                    }
+                };
+
+                const result = await callGemini(payload);
+                const synthesizedText = result.candidates?.[0]?.content?.parts?.[0]?.text || 
+                                       "O Metamodelo falhou ao gerar a síntese. Verifique as respostas dos especialistas e a lógica do prompt.";
+
+                // 6. Exibir o Resultado Final
+                finalOutput.innerHTML = `<div class="prose max-w-none">${synthesizedText}</div>`;
+
+
+            } catch (error) {
+                console.error("Erro na Orquestração:", error);
+                finalOutput.innerHTML = `<p class="text-red-600 font-bold">Erro Crítico no Sistema de Orquestração:</p><p class="text-red-500">${error.message}</p>`;
+            } finally {
+                // 7. Controle de UI: Restaura o botão e esconde o loading
+                submitBtn.disabled = false;
+                btnText.textContent = 'Orquestrar Resposta';
+                loadingIndicator.classList.add('hidden');
+                loadingStatus.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
